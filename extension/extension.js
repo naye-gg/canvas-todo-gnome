@@ -9,7 +9,6 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const HELPER = GLib.build_filenamev([GLib.get_home_dir(), '.local/bin/canvas-pendientes']);
 const REFRESH_SECS = 900;
-const MAX_TITLE = 24;  // recorte del título en la barra
 
 const Indicator = GObject.registerClass(
 class Indicator extends PanelMenu.Button {
@@ -51,9 +50,7 @@ class Indicator extends PanelMenu.Button {
                 new PopupMenu.PopupMenuItem('Sin tareas pendientes 🎉', {reactive: false}));
         } else {
             const next = data.items[0];
-            const short = next.title.length > MAX_TITLE
-                ? `${next.title.slice(0, MAX_TITLE - 1)}…` : next.title;
-            this._label.text = `📚 ${data.count} · ${short} · ${next.when}`;
+            this._label.text = `📚 ${data.count} · ${next.when}`;
             for (const it of data.items) {
                 const item = new PopupMenu.PopupMenuItem(`${it.title}`);
                 item.add_child(new St.Label({
