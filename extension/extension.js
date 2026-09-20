@@ -77,7 +77,7 @@ class Indicator extends PanelMenu.Button {
 export default class CanvasTodoExtension extends Extension {
     enable() {
         this._indicator = new Indicator();
-        Main.panel.addToStatusArea('canvas-todo', this._indicator);
+        Main.panel.addToStatusArea('canvas-todo', this._indicator, 0, 'left');
         this._indicator._refresh();
         this._timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, REFRESH_SECS, () => {
             this._indicator._refresh();
