@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Tareas pendientes de Canvas -> JSON en stdout. Solo stdlib."""
+import json, os, sys, urllib.request, urllib.error
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+
+DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/canvas-widget")
+
+
+def read_setting(environment_name, filename):
+    """Lee primero una variable de entorno y luego un archivo de configuración."""
+    value = os.environ.get(environment_name, "").strip()
+    if value:
+        return value
+
+    config_dir = os.environ.get("CANVAS_CONFIG_DIR", DEFAULT_CONFIG_DIR)
+    try:
+        with open(os.path.join(config_dir, filename), encoding="utf-8") as file:
+            value = file.read().strip()
+    except FileNotFoundError:
+        value = ""
+
+    if not value:
+        raise RuntimeError(
+            f"Falta {environment_name}. Defínela o crea {config_dir}/{filename}.")
+    return value
+
+
+def get(host, token, path):
+    req = urllib.request.Request(f"https://{host}/api/v1/{path}",
+                                 headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r)
+
+
+def due_label(due, now):
+    """'sin fecha' | 'vencida' | 'hoy' | 'mañana' | 'en N d'"""
+    if not due:
+        return "sin fecha"
+    d = datetime.fromisoformat(due.replace("Z", "+00:00"))
+    days = (d.date() - now.date()).days
+    if d < now:
+        return "vencida"
+    return {0: "hoy", 1: "mañana"}.get(days, f"en {days} d")
+
+
+def main():
+    host = read_setting("CANVAS_HOST", "host")
+    token = read_setting("CANVAS_TOKEN", "token")
+    courses = get(host, token, "courses?enrollment_state=active&per_page=100")
+    names = {c["id"]: c.get("course_code") or c.get("name", "?") for c in courses}
+
+    def pending(cid):
+        try:
+            return [(cid, a) for a in
+                    get(host, token, f"courses/{cid}/assignments?bucket=unsubmitted&per_page=100")]
+        except urllib.error.HTTPError:
+            return []
+
+    with ThreadPoolExecutor(8) as ex:
+        rows = [r for batch in ex.map(pending, names) for r in batch]
+
+    now = datetime.now(timezone.utc)
+    items = [{
+        "title": a.get("name", "?"),
+        "course": names[cid].split("(")[0].strip()[:34],
+        "due": a.get("due_at"),
+        "when": due_label(a.get("due_at"), now),
+        "url": a.get("html_url") or f"https://{host}/courses/{cid}",
+    } for cid, a in rows]
+    items.sort(key=lambda i: (i["due"] is None, i["due"] or ""))
+    json.dump({"count": len(items), "items": items}, sys.stdout, ensure_ascii=False)
+
+
+def selftest():
+    now = datetime(2026, 8, 28, 12, 0, tzinfo=timezone.utc)
+    assert due_label(None, now) == "sin fecha"
+    assert due_label("2026-08-27T23:00:00Z", now) == "vencida"
+    assert due_label("2026-08-28T23:00:00Z", now) == "hoy"
+    assert due_label("2026-08-29T10:00:00Z", now) == "mañana"
+    assert due_label("2026-09-03T10:00:00Z", now) == "en 6 d"
+    print("ok")
+
+
+if __name__ == "__main__":
+    selftest() if "--selftest" in sys.argv else main()

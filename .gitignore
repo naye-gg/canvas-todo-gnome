@@ -1,0 +1,5 @@
+# Credenciales y configuración personal de Canvas
+config/
+.env
+token
+host

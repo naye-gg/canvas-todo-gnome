@@ -1,0 +1,7 @@
+{
+  "uuid": "canvas-todo@local",
+  "name": "Canvas Pendientes",
+  "description": "Muestra las tareas pendientes de Canvas en la barra superior.",
+  "shell-version": ["48"],
+  "version": 1
+}
